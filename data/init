@@ -1,0 +1,35 @@
+#!/bin/sh
+# /init -- this executable is the first program run by
+# the Linux kernel, and it is assigned the PID 1. This
+# is important, because only the process with PID 1 is
+# able to change the root filesystem.
+#
+# By default, this init script gives sets up a minimal
+# initialisation environment and then starts Busybox
+# in interactive mode via exec() (to retain the PID
+# 1). In order to switch to your real system, you
+# now have to:
+#
+# 1. Mount it on /mnt
+# 2. Change into /mnt
+# 3. Execute "exec switch_root /mnt /sbin/init"
+#    (you may have to replace /sbin/init with
+#    the actual name of the init supplied by
+#    your distribution).
+
+# Busybox scatters its symlinks over several
+# directories. Ensure all are searched.
+export PATH=/usr/bin:/bin:/usr/sbin:/sbin
+
+# Basic mounts required for an interactive Busybox
+# (and most other programs).
+mount -t proc /proc -o nosuid,noexec,nodev
+mount -t sysfs sys /sys -o nosuid,noexec,nodev
+mount -t devtmpfs dev /dev -o mode=0755,nosuid
+mount -t tmpfs run /run -o nosuid,nodev,mode=0755
+
+# Turn on backlight (without this, the screen stays black).
+echo 64 > /sys/class/leds/lcd-backlight/brightness
+
+# Start the interactive shell with PID 1.
+exec /bin/sh -i

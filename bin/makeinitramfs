@@ -1,0 +1,72 @@
+#!/usr/bin/env ruby
+require "optparse"
+require "pathname"
+require "fileutils"
+require "tempfile"
+require "paint"
+
+ROOT_DIR = Pathname.new(File.dirname(File.expand_path(__FILE__)))
+DATA_DIR = ROOT_DIR + "data"
+
+########################################
+# Option handling
+
+@options = {}
+OptionParser.new do |op|
+  op.on("-d", "--device-table FILE"){|str| @options[:device_table] = Pathname.new(str)}
+  op.on("-b", "--busybox-install PATH"){|str| @options[:busybox] = Pathname.new(str)}
+  op.on("-i", "--init-script FILE"){|str| @options[:init] = Pathname.new(str)}
+  op.on("-s", "--skeleton PATH"){|str| @options[:skeleton] = Pathname.new(str)}
+  op.on("-V", "--verbose"){@options[:verbose] = true}
+
+  op.on("-h", "--help") do
+    puts op
+    exit
+  end
+end.parse!(ARGV)
+
+# Load helper functions
+require_relative "_functions"
+
+########################################
+# Actual start
+
+# Sadly, mknod can only be run as root.
+die "This must be run as root." unless Process.uid == 0
+
+# LZOP required (we check for CPIO later on).
+die "lzop not found." unless system "lzop -h >/dev/null 2>&1"
+
+# Create an empty directory that will contain the initramfs.
+mktmpdir do |tmpdir|
+
+  # Copy the base skeleton in our new root directory
+  msg "Copying base skeleton"
+  cp_r "#{@options[:skeleton]}/.", tmpdir # Copy contents
+
+  # Copy the Busybox installation in our new root directory
+  msg "Copying Busybox files"
+  cp_r @options[:busybox] + "bin", tmpdir
+  cp_r @options[:busybox] + "sbin", tmpdir
+  cp_r @options[:busybox] + "usr", tmpdir
+
+  # Copy the init script
+  msg "Adding /init"
+  cp @options[:init], tmpdir + "init"
+  chmod 0755, tmpdir + "init" # rwx-rx-rx
+
+  # Interpret the device table file
+  msg "Parsing device file"
+  open(@options[:device_table]) do |file|
+    file.each_line do |line|
+      handle_device_line(line, tmpdir)
+    end
+  end
+
+  msg "Creating LZOP-compressed CPIO archive"
+  cpio tmpdir, "initramfs.cpio"
+  lzop "initramfs.cpio"
+  rm "initramfs.cpio"
+end
+
+finish "Build complete."

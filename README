@@ -1,0 +1,99 @@
+Alternative setup for the ARCHOS 101G9 tablet
+=============================================
+
+DISCLAIMER: I am not affiliated with ARCHOS in any way. Using the
+kernel/initramfs created by the tools in this repository will void
+your warranty.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% INCOMPLETION NOTE                        %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% This repository is incomplete. Some      %
+% things described in the README are not   %
+% there yet, most notable the Linux kernel %
+% configuration. Sorry!                    %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+What is it?
+-----------
+
+ARCHOS equipped the 
+[101G9 tablet](http://www.archos.com/products/gen9/archos_101_g9/index.html)
+with an open boot loader and provided a facility to flash a second
+kernel and initramfs onto the device, making it a dual-boot
+device, so you do not have to kill Android if you just want a second
+OS on your tablet.
+
+This repository contains the tools for creating a kernel and an
+initramfs which you can flash onto your device. If you boot them, you
+will end up in a working [Busybox](http://www.busybox.net) shell with
+root access, so you can do everything you want, including installing a
+fully-fledged Linux distribution such as [Arch Linux
+ARM](http://archlinuxarm.org).
+
+ARCHOS itself provides similar tools
+[here](http://gitorious.org/archos/archos-gpl-gen9) and
+[here](http://gitorious.org/archos/archos-gpl-gen9-kernel-ics) and I
+do have to thank them for making them available, because they were a
+great help at finding out how to get this up and running. So, if you
+want to stick with things only provided by ARCHOS, you have to look
+there. However, their build system is incredibly complicated and badly
+documented (even containing wrong docs at some places), which was the
+initial reason why I started this project.
+
+I do not provide binary kernels and busybox installations. Making your
+way through the compilation will make you understand better what is
+going on under the hood; however, compilation doesn’t have to be as
+complicated as the ARCHOS build stuff.
+
+Note this repository doesn’t contain the exact same configuration as
+the ARCHOS build system. I enhanced it a bit, using more recent
+versions of Busybox and [Linux](http://kernel.org) and a different
+configuration (although I based my changes on ARCHOS’
+configurations). Most notably ARCHOS’ default Linux configuration
+won’t give you shell access^^.
+
+The whole process is very configurable, so you can easily use another
+Busybox, init or kernel. Just adjust the parameters of the
+`makeinitramfs` program.
+
+What do I need?
+---------------
+
+You need some prerequisites. First, you need some hardware:
+
+* The ARCHOS 101G9 tablet.
+* A Micro-USB/USB cable. You have to connect the tablet to your PC.
+* A USB hub with external power supply. Your tablet doesn’t provide
+  enough power for long experiments with an external keyboard.
+* An external keyboard. At least until today (2012) Linux’ virtual
+  terminal didn’t support touch input. :-)
+
+On the software side, you need:
+
+* An ARMv7 cross compiler. A GCC with target `arm-linux-gnueabi` will
+  do; most Linux distributions have something like that in their
+  repositories, so you don’t have to compile this yourself (for Arch
+  Linux, there’s a package `arm-linux-gnueabi-gcc` in the AUR).
+* The `cpio` or `bsdcpio` archive program to assemble the
+  Initramfs. Should be in your distribution’s repositories.
+* The `lzop` compression program to compress the Initramfs to the
+  format the tablet expects. Should be in your distribution’s
+  repositories.
+* The [ARCHOS SDE](http://www.archos.com/support/support_tech/updates_dev.html)
+  installed on your tablet.
+* The [Ruby](http://ruby-lang.org) interpreter, RubyGems and the
+  `paint` gem. The first two should be in your distribution’s
+  repositories (most likely even in the same package), you can get the
+  last by executing this as root:
+    # gem install paint
+
+How to use it?
+--------------
+
+See the file USAGE.
+
+License
+-------
+
+GPLv3. More information to follow.

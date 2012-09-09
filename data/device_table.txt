@@ -1,0 +1,199 @@
+# device_table.txt
+# Configuration file specifying which devices makeinitramfs(1)
+# shall create.
+
+# This file is read by the `makeinitramfs' program and specifies
+# which devices to be created and which permissions to set on
+# them (and other files). It does so by calling out to the `mknod'
+# program, which is why `makeinitramfs' can only be run by root.
+#
+# Using udev would be an even better solution, but sadly systemd
+# (which has replaced udev) has a looooooong tail of dependencies
+# we would have to cross-compile...
+#
+# To adjust the permissions on a particular, already existing file,
+# you can just add an entry like:
+#
+#   /sbin/foobar        f       2755    0       0       -       -       -       -       -
+#
+# and (assuming the file /sbin/foobar exists) it will be made setuid
+# root (regardless of what its permissions are on the host filesystem.
+#
+# To generete an array of similar device nodes, use the last three
+# fields of a line accordingly. Counting back from the end, the
+# third field specifies the number to start the device numeration
+# at, the second-to-last field specifies the increment between
+# iterations (i.e. by specifying 2 you would get 1, 3, 5, etc. in
+# the device names), and the last field sets the sets the number
+# of iterations - 1. Device minor numbers are automatically
+# incremented by 1 per iteration, starting at what the "minor"
+# field says (see further below).
+# For example, if I wanted to create /dev/hda and /dev/hda[0-14]
+# I could just use the following two table entries:
+#
+#                                                            <start>  <inc>   <count>
+#   /dev/hda    b       640     0       0       3       0       0       0       -
+#   /dev/hda    b       640     0       0       3       1       1       1       15
+
+# When building a target filesystem, it is desirable to not have to
+# become root and then run 'mknod' a thousand times.  Using a device 
+# table you can create device nodes and directories "on the fly".
+# 
+# Device table entries take the form of:
+#
+# <name> <type> <mode> <uid> <gid> <major> <minor> <start> <inc> <count>
+#
+# or, for more compact tables:
+#
+# <name> t mode u g M m s i c
+#
+# where "name" is the file name, "type" can be one of: 
+#       f       A regular file
+#       d       Directory
+#       c       Character special device file
+#       b       Block special device file
+#       p       Fifo (named pipe)
+
+# "uid" is the user id for the target file, "gid" is the group id for
+# the target file. The "major" and "minor" entries are only used when
+# creating device nodes (i.e. if "type" is set to either "c" or "b")
+# and specify the major and minor numbers for that device (you can
+# find the specification for those at
+# http://www.lanana.org/docs/device-list/). "start", "inc" and "count"
+# work as explained further above. All entries in a single line are
+# separated by any amount of blank space, i.e. tabs or spaces (which
+# in your own interest you don’t want to mix).
+#
+# Have fun
+# - Marvin Gülker <quintus at quintilianus dot eu>
+#
+# Original version of this documentation by
+# - Erik Andersen <andersen at codepoet dot org>
+
+# TODO: Most likely half of this file can be wiped out
+# for a simple **INIT**ramfs. However, this requires
+# a good number of trial-and-error deletions...
+
+# Directory setup with proper permissions.
+#<name>    <type> <mode> <uid> <gid> <major> <minor> <start> <inc> <count>
+/dev         d     755     0     0      -       -       -      -      -
+/dev/pts     d     755     0     0      -       -       -      -      -
+/dev/shm     d     755     0     0      -       -       -      -      -
+/tmp         d    1777     0     0      -       -       -      -      -
+/run         d    1777     0     0      -       -       -      -      -
+/etc         d     755     0     0      -       -       -      -      -
+/sys         d     755     0     0      -       -       -      -      -
+/mnt         d     755     0     0      -       -       -      -      -
+#/config  d 755 0 0 - - - - -
+/proc        d     755     0     0      -       -       -      -      -
+#/home        d     755     0 0 - - - - -
+#/home/default d 2755 1000 1000 - - - - -
+/root        d     750     0     0      -       -       -      -      -
+
+#/usr/sbin    d 755 0 0 - - - - -
+/bin/busybox f    4755     0     0      -       -       -      -      -
+
+# Normal system devices
+#<name>      t mode u  g  M   m s i  c
+/dev/mem     c  640 0  0  1   1 0 0  -
+/dev/kmem    c  640 0  0  1   2 0 0  -
+/dev/null    c  666 0  0  1   3 0 0  -
+/dev/zero    c  666 0  0  1   5 0 0  -
+/dev/random  c  666 0  0  1   8 0 0  -
+/dev/urandom c  666 0  0  1   9 0 0  -
+/dev/ram     b  640 0  0  1   1 0 0  -
+/dev/ram     b  640 0  0  1   0 0 1  4
+/dev/loop    b  640 0  0  7   0 0 1  2
+/dev/rtc     c  640 0  0 10 135 - -  -
+/dev/console c  666 0  0  5   1 - -  -
+/dev/tty     c  666 0  0  5   0 - -  -
+/dev/tty     c  666 0  0  4   0 0 1  8
+/dev/ttyp    c  666 0  0  3   0 0 1 10
+/dev/ptyp    c  666 0  0  2   0 0 1 10
+/dev/ptmx    c  666 0  0  5   2 - -  -
+/dev/ttyP    c  666 0  0 57   0 0 1  4
+/dev/ttyS    c  666 0  0  4  64 0 1  4
+/dev/fb      c  660 0 99 29   0 0 1  5
+/dev/hdmi    c  600 0  0 10 241 - -  -
+
+# Input stuff
+#<name>          t mode u g  M  m s i c
+/dev/input       d  755 0 0  -  - - - -
+/dev/input/mice  c  640 0 0 13 63 0 0 -
+/dev/input/mouse c  660 0 0 13 32 0 1 4
+/dev/input/event c  660 0 0 13 64 0 1 8
+
+# Audio stuff
+#<name>    t mode u g  M  m s i c
+/dev/dsp   c  666 0 29 14 3 - - -
+/dev/mixer c  666 0 29 14 0 - - -
+
+# SCSI Devices
+#<name>  t mode u g M  m s i  c
+/dev/sda b  640 0 0 8  0 0 0  -
+/dev/sda b  640 0 0 8  1 1 1 15
+/dev/sdb b  640 0 0 8 16 0 0  -
+/dev/sdb b  640 0 0 8 17 1 1 15
+
+# MMC Devices
+#<name>       t mode u g  M   m s i c
+/dev/mmcblk0  b  640 0 0 179  0 0 0 -
+/dev/mmcblk0p b  640 0 0 179  1 1 1 8
+/dev/mmcblk1  b  640 0 0 179 16 0 0 -
+/dev/mmcblk1p b  640 0 0 179 17 1 1 8
+/dev/mmcblk2  b  640 0 0 179 24 0 0 -
+/dev/mmcblk2p b  640 0 0 179 25 1 1 8
+
+# AVOS standard mount points
+#<name>     t mode u g M m s i c
+/mnt/data   d  755 0 0 - - - - -
+/mnt/system d  755 0 0 - - - - -
+/mnt/ram    d  755 0 0 - - - - -
+/mnt/host   d  755 0 0 - - - - -
+
+# I2C devices
+#<name>     t mode u g  M m s i c
+/dev/i2c-   c  666 0 0 89 0 0 1 5
+
+# Usb host mount points
+#<name>   t mode u g M m s i c
+/mnt/msc0 d  755 0 0 - - - - -
+/mnt/msc1 d  755 0 0 - - - - -
+/mnt/msc2 d  755 0 0 - - - - -
+/mnt/msc3 d  755 0 0 - - - - -
+/mnt/msc4 d  755 0 0 - - - - -
+/mnt/msc5 d  755 0 0 - - - - -
+/mnt/msc6 d  755 0 0 - - - - -
+
+# Video stuff
+#<name>    t mode u g  M m s i c
+/dev/video c  660 0 0 81 0 0 1 5
+
+# Accelerometer stuff
+#<name>                t mode u g  M   m s i c
+/dev/misc              d  755 0 0  -   - - - -
+/dev/misc/accel_ctrl   c  660 0 0 10  57 0 0 -
+/dev/misc/twl4030-madc c  660 0 0 10 255 0 0 -
+
+# modem
+#<name>     t mode u g   M m s i c
+/dev/ttySPI c  666 0 0 234 0 0 1 8
+/dev/ttyUSB c  666 0 0 188 0 0 1 5
+
+# Alsa
+#<name>            t mode u g   M  m s  i c
+/dev/aloadC0       c  660 0 0  14  0 0  0 -
+/dev/snd           d  755 0 0   -  - -  - -
+/dev/snd/controlC  c  660 0 0 116  0 0 32 3
+/dev/snd/seq       c  660 0 0 116  1 0  0 -
+/dev/snd/timer     c  660 0 0 116 33 0  0 -
+/dev/snd/pcmC0D0p  c  660 0 0 116 16 0  0 -
+/dev/snd/pcmC0D0c  c  660 0 0 116 24 0  0 -
+/dev/snd/pcmC1D0p  c  660 0 0 116 48 0  0 -
+/dev/snd/pcmC1D0c  c  660 0 0 116 56 0  0 -
+/dev/snd/pcmC2D0p  c  660 0 0 116 80 0  0 -
+/dev/snd/pcmC2D0c  c  660 0 0 116 88 0  0 -
+
+# Local Variables:
+# mode: conf-space
+# End:

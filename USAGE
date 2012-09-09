@@ -1,0 +1,18 @@
+How to assemble your alternative OS
+===================================
+
+1. Cross-compile Busybox with the configuration in `data/configs` and
+   install it somewhere you find it.
+     $ cd <BUSYBOXDOWNLOADPATH>
+     $ cp <INSTALLPATH>/data/configs/busybox*.config .config
+     $ make ARCH=arm CROSS_COMPILE=arm-linux-gnueabi-
+     $ make install
+   NOTE: Busybox will be installed to `$PWD/_install` by default.
+2. Cross-compile Linux with the configuration which yet has to be
+   found...
+3. Execute the Initramfs generator:
+     # ruby bin/makeinitramfs -d data/device_table.txt -i data/init \
+     -s data/root-skeleton -b <BUSYBOXDOWNLOADPATH>/_install
+4. You have the ready initramfs.cpio.lzo in your current working
+   directory. Flash this and the kernel on the tablet, and you’re
+   done.
