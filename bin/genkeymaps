@@ -1,0 +1,76 @@
+#!/bin/bash
+# genkeymaps compiles plaintext keymaps into binary
+# keymaps as required by Busybox. You usually shouldn't
+# need this program--it is used to generate the contents
+# of the data/root-skeleton/usr/share/keymaps directory
+# from the keymaps that are installed on your local
+# system.
+
+# If -h was given, output the help and exit.
+for arg in $*; do
+    if [ arg = "-h" ]; then
+        cat <<EOF
+USAGE:
+  $0 TARGET [SOURCE]
+
+Recursively converts all keymaps found in SOURCE (or
+if not given, tries /usr/share/kbd/keymaps and then
+/usr/share/keymaps, in that order; if both don't exist,
+exit abnormally with a proper message) into Busybox'
+binary format and stores them in TARGET (using the
+same layout as in SOURCE).
+EOF
+    fi
+done
+
+# Get the source directory.
+if [ -z $2 ]; then
+
+    # Try the two common directories for keymap files. If none
+    # is found, ask the user to specify it.
+    if [ -d /usr/share/kbd/keymaps ]; then
+        source=/usr/share/kbd/keymaps
+    elif [ -d /usr/share/keymaps ]; then
+        source=/usr/share/keymaps
+    else
+        echo "Keymap source directory not found on your system. Please specify it manually." >&2
+        exit 1
+    fi
+else
+    source="$2"
+fi
+
+# Get the target directory.
+if [ -z $1 ]; then
+    echo "No target directory given. Use -h for help." >&2
+    exit 1
+else
+    # Convert the target to an absolute name if necessary.
+    if [ `echo "$1" | cut -c1` = "/" ]; then
+        target="$1"
+    else
+        target="$PWD/$1"
+    fi
+fi
+
+# Create the target directory if it does not exist yet.
+if ! [ -d "$target" ]; then
+    mkdir -p "$target"
+fi
+
+# Recursively compile each file in the source directory to
+# the corresponding file in the target directory.
+cd "$source"
+for entry in `find .`; do
+    # Only process files, and only those that are most likely
+    # keymap files (and not inclusion files or so)
+    if [ -f "$entry" ] && (echo $entry | grep -q ".map") ; then
+        echo "Processing $entry"
+        mkdir -p "$target/`dirname $entry`"
+
+        # Actual conversion
+        if ! (loadkeys -b "$entry" > "$target"/`echo $entry | sed 's/.map\\(.gz\\)\\?/.bmap/'`); then
+            echo "WARNING: 'loadkeys $entry' failed. Does your loadkeys program support the -b option?" >&2
+        fi
+    fi
+done
