@@ -36,8 +36,7 @@ How to assemble your alternative OS
    you may want to install it onto that one, otherwise just use the
    USB stick as the main harddisk.
 7. Copy the kernel modules onto the root device:
-     # cp -r $TARGET/kernelmodules
-   <rootdevicemountpoint>/lib/modules/<kernelversion>
+     # cp -r $TARGET/kernelmodules/lib/. <rootmountpoint>/lib
 
 TODO: Write something about which modules to load and
 ti-connectivity.
