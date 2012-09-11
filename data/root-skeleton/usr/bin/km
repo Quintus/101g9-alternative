@@ -1,0 +1,118 @@
+#!/bin/sh
+# km -- load a keymap without having to type obscure
+# characters like | or < which may be hard to find
+# if you don't know the US keyboard.
+
+# Root directory of the keymap directory structure in
+# the initramfs.
+KEYMAPS_BASEDIR=/usr/share/keymaps
+
+# Recursively iterates over the directory $1 and prints
+# out all keymap files found in the format "km" expects.
+kmprint(){
+    for entry in `ls "$1"`; do
+        if [ -f "$1/$entry" ] && [ "${entry#*.}" = "bmap" ]; then
+            basename "$entry" .bmap
+        elif [ -d "$1/$entry" ]; then
+            kmprint "$1/$entry"
+        fi
+    done
+}
+
+# Searches recursively through $1 for a file named
+# $2.bmap. If it is found, writes out the complete
+# path to it with $1 (and all intermediate directories)
+# prepended and returns success. Otherwise returns 1
+# and writes out nothing.
+kmfind(){
+    # Iterate through all files and directories; if
+    # a file is found, check whether it is our search
+    # target, and if so, return. If it's a directory,
+    # repeat the process for the directory.
+    for entry in `ls "$1"`; do
+        if [ -f "$1/$entry" ] && [ $entry = $2.bmap ]; then
+            # Found! This is our keymap file.
+            echo "$1/$2.bmap"
+        elif [ -d "$1/$entry" ]; then
+            # This is a directory. Call ourself again for
+            # the subdirectory.
+            result=`kmfind "$1/$entry" $2`
+
+            # If the target is found, immediately abort
+            # the recursion and return it.
+            if ! [ -z $result ]; then
+                echo $result
+                return 0;
+            fi
+        fi
+    done
+
+    # If we get here, then $dir neither contains the
+    # target file, nor any subdirectories we did not
+    # already iterate over. Nothing found.
+    return 1
+}
+
+# Argument parsing
+for arg in $*; do
+    if [ $arg = "-h" ] || [ $arg = "--help" ]; then
+        cat <<EOF
+Usage:
+  km <keymap>
+  km -l
+
+"km" is a wrapper for Busybox' "loadkmap" applet that allows
+you to load a keymap different from the US standard keyboard
+which Busybox loads by default. However, depending on how
+(un)familiar you are with the US keyboard, typing
+
+  $ cat /usr/share/keymaps/i386/de-latin1.bmap | loadkmap
+
+may be a little hard. Instead, you can just use km:
+
+  $ km de-latin1
+
+This way you can just feed "km" with the basename of the keymap
+file and you're done. To get a list of all available keymaps,
+use
+
+  $ km -l
+
+. See the table at https://wiki.archlinux.org/index.php/KEYMAP for
+finding out which keymap belongs to your country's usual keyboards.
+Note by default only keymaps from the i386 set are included; if you
+need other ones, compile them with "loadkeys -b <file>" on your main
+box and copy them into the initramfs at the /usr/share/keymaps/ folder.
+EOF
+        exit
+    elif [ $arg = "-l" ] || [ $arg = "--list" ]; then
+        # List all keymap files without directory and suffix,
+        # just as km expects them.
+        kmprint "$KEYMAPS_BASEDIR"
+        exit
+    fi
+done
+
+# keymap argument is required.
+if [ -z $1 ]; then
+    echo "Missing keymap. Try -h for help." >&2
+    exit 1
+fi
+
+map=`kmfind "$KEYMAPS_BASEDIR" $1`
+
+# If $map is still an empty string, the file is definitely
+# not there.
+if [ -z $map ]; then
+    echo "Keymap $1 not found. Not loading anything." >&2
+    exit 2
+fi
+
+# Load it!
+cat $map | loadkmap
+
+# Give the user a feedback which exact file was loaded.
+echo "Loaded keymap $map."
+
+# EOF
+exit
