@@ -1,72 +1,233 @@
-#!/usr/bin/env ruby
-require "optparse"
-require "pathname"
-require "fileutils"
-require "tempfile"
-require "paint"
-
-ROOT_DIR = Pathname.new(File.dirname(File.expand_path(__FILE__)))
-DATA_DIR = ROOT_DIR + "data"
+#!/bin/bash
+# makeinitramfs -- assembles your initramfs for your
+# ARCHOS 101G9 tablet.
 
 ########################################
-# Option handling
+# Functions
 
-@options = {}
-OptionParser.new do |op|
-  op.on("-d", "--device-table FILE"){|str| @options[:device_table] = Pathname.new(str)}
-  op.on("-b", "--busybox-install PATH"){|str| @options[:busybox] = Pathname.new(str)}
-  op.on("-i", "--init-script FILE"){|str| @options[:init] = Pathname.new(str)}
-  op.on("-s", "--skeleton PATH"){|str| @options[:skeleton] = Pathname.new(str)}
-  op.on("-V", "--verbose"){@options[:verbose] = true}
+# Print out the given message on the standard
+# error stream in red and exit the script abnormally.
+die(){
+    echo -e '\e[31;1m:( '$*'\e[0m' >&2
+    exit 1
+}
 
-  op.on("-h", "--help") do
-    puts op
-    exit
-  end
-end.parse!(ARGV)
+# Print out the given message in yellow on the
+# standard error stream.
+warn(){
+    echo -e '\e[33;1m!! '$*'\e[0m' >&2
+}
 
-# Load helper functions
-require_relative "_functions"
+# Print out the given message in blue on the standard
+# output stream.
+msg(){
+    echo -e '\e[34;1m:: '$*'\e[0m'
+}
+
+# Print out the given message in green on the standard
+# output stream and exit the script normally.
+finish(){
+    echo -e '\e[32;1m:) '$*'\e[0m'
+    exit 0
+}
+
+# Creates/modifies a single device/file. Takes these
+# arguments, which correspond exactly to what you
+# can specify in the device table.
+# $1: filename
+# $2: type ([fdcbp])
+# $3: Mode
+# $4: Major number for mknod(1)
+# $5: Minor number for mknod(1)
+apply_device()
+{
+    local filename=$1
+    local     type=$2
+    local     mode=$3
+    local    major=$4
+    local    minor=$5
+
+    case $type in
+        f)
+            chmod $mode $filename
+            ;;
+        d)
+            mkdir -m $mode $filename
+            ;;
+        c)
+            mknod -m $mode $filename c $major $minor
+            ;;
+        b)
+            mknod -m $mode $filename b $major $minor
+            ;;
+        p)
+            mkfifo -m $mode $filename
+            ;;
+        *)
+            warn "Unknown type $type, ignoring"
+    esac
+}
+
+# Handles a single line of a device table file,
+# creates the necessary device(s) under the given
+# root directory ($1), and sets the appropriate
+# permissions according to the line. Apart from $1,
+# which will be the initramfs’ root directory, all
+# other arguments are directly those which you can
+# specify in the device file.
+# $1: Directory that will be the root directory of the initramfs
+# $2: Path
+# $3: type
+# $4: mode
+# $5: uid
+# $6: gid
+# $7: major
+# $8: minor
+# $9: start
+# $10: inc
+# $11: count
+handle_device_line(){
+   local  root=$1
+   local  path=$2
+   local  type=$3
+   local  mode=$4
+   local   uid=$5
+   local   gid=$6
+   local major=$7
+   local minor=$8
+   local start=$9
+   local   inc=${10}
+   local count=${11}
+
+    # Ignore empty lines and comments
+    if [ -z $path ] || (echo $path | grep -Eq '^\s*#'); then
+        return
+    fi
+
+    # Apply current line, either as a sequence of commands
+    # or a single command depending on the last three fields
+    # in the line (start, inc and count).
+    if [ $start != "-" ] && [ $inc != "-" ] && [ $count != "-" ]; then # Automatic numbering requested
+        for (( i=start; i < count; i += $inc)); do
+            # Name of the target device
+            name="$root/$path$i"
+
+            # Create/modify device
+            apply_device $name $type $mode $major $minor
+            chown $uid:$gid $name
+
+            # Prepare for next iteration
+            # (minor number always increases by 1 regardless
+            # of what $inc is set to)
+            minor=$(($minor+1))
+        done
+    else # Just a single device
+        name="$root/$path"
+
+        apply_device $name $type $mode $major $minor
+        chown $uid:$gid $name
+    fi
+}
 
 ########################################
 # Actual start
 
-# Sadly, mknod can only be run as root.
-die "This must be run as root." unless Process.uid == 0
+# mknod(1) requires root.
+#if [ $UID -ne 0 ]; then
+#    die "This must be run as root."
+#fi
 
-# LZOP required (we check for CPIO later on).
-die "lzop not found." unless system "lzop -h >/dev/null 2>&1"
+# lzop(1) is needed for compression.
+if ! $(lzop -h > /dev/null 2>&1); then
+    die "lzop not found."
+fi
 
-# Create an empty directory that will contain the initramfs.
-mktmpdir do |tmpdir|
+# A CPIO archiver is also needed.
+if $(cpio --help > /dev/null 2>&1); then
+    CPIO=cpio
+elif $(bsdcpio --help > /dev/null 2>&1); then
+    CPIO=bsdcpio
+else
+    die "Neither cpio nor bsdcpio was found."
+fi
 
-  # Copy the base skeleton in our new root directory
-  msg "Copying base skeleton"
-  cp_r "#{@options[:skeleton]}/.", tmpdir # Copy contents
+# Commandline parsing
+while getopts hd:b:s: OPT; do
+    case $OPT in
+        d)
+            DEVICEFILE=$OPTARG
+            ;;
+        b)
+            BBDIR=$OPTARG
+            ;;
+        s)
+            SKELDIR=$OPTARG
+            ;;
+        h)
+            cat <<EOF
+Usage:
+  makeinitramfs -d <devicefile> -b <busyboxdir> -s <rootskeldir>
 
-  # Copy the Busybox installation in our new root directory
-  msg "Copying Busybox files"
-  cp_r @options[:busybox] + "bin", tmpdir
-  cp_r @options[:busybox] + "sbin", tmpdir
-  cp_r @options[:busybox] + "usr", tmpdir
+makeinitramfs assembles an initial ramdisk (initramfs) for use
+with the ARCHOS 101G9 tablet. The resulting initramfs.cpio.lzo
+will be placed in the current working directory.
 
-  # Copy the init script
-  msg "Adding /init"
-  cp @options[:init], tmpdir + "init"
-  chmod 0755, tmpdir + "init" # rwx-rx-rx
+-d <devicefile>   The device table file.
+-b <busyboxdir>   The path to the Busybox installation to include.
+-s <rootskeldir>  Path to a directory that will be copied as-is as the root dir.
+-h                Displays this help and exits.
+EOF
+            exit 0
+            ;;
+        \?)
+            # getopt found an error
+            die "Incorrect commandline. Try -h for help."
+            ;;
+    esac
+done
 
-  # Interpret the device table file
-  msg "Parsing device file"
-  open(@options[:device_table]) do |file|
-    file.each_line do |line|
-      handle_device_line(line, tmpdir)
-    end
-  end
+if [ -z $BBDIR ]; then
+    die "No Busybox installation directory given. Try -h for help."
+elif [ -z $SKELDIR ]; then
+    die "No root directory skeleton given. Try -h for help."
+elif [ -z $DEVICEFILE ]; then
+    die "No device table file given. Try -h for help."
+fi
 
-  msg "Creating LZOP-compressed CPIO archive"
-  cpio tmpdir, "initramfs.cpio"
-  lzop "initramfs.cpio"
-  rm "initramfs.cpio"
-end
+# Create a temporary directory that will be used
+# as the root directory of the initramfs.
+tmpdir=`mktemp -d`
 
-finish "Build complete."
+# Copy the base skeleton in our new root directory.
+msg "Copying base skeleton"
+cp -r "$SKELDIR/." $tmpdir # Copy contents
+# Copy the Busybox installation in our new root directory.
+msg "Copying Busybox files"
+cp -r "$BBDIR/bin"  $tmpdir
+cp -r "$BBDIR/sbin" $tmpdir
+cp -r "$BBDIR/usr"  $tmpdir
+
+# Interpret the device file
+while read line; do
+    # $line must be left unquoted; handle_device_line()
+    # simply accepts the line’s whitespace-separated
+    # contents as arguments, making parsing superflous.
+    handle_device_line "$tmpdir" $line
+done < $DEVICEFILE
+
+# Crate a CPIO archive from the temporary directory
+# and compress it with LZOP.
+# This file is the actual initramfs.
+msg "Creating LZOP-compressed CPIO archive"
+cpio_target="$PWD/initramfs.cpio"
+cd $tmpdir
+find . | $CPIO -H newc -o > "$cpio_target"
+cd -
+lzop "$cpio_target"
+rm "$cpio_target"
+
+# Remove the temporary directory
+rm -rf $tmpdir
+
+# Done.
+finish "Build complete"
