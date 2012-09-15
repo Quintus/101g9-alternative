@@ -13,9 +13,9 @@ release-dir: docs
 	cp -r data $(RELEASE_DIR)
 	cp -r bin/tools $(RELEASE_DIR)/bin
 	mkdir $(RELEASE_DIR)/doc
+	cp -r doc/text $(RELEASE_DIR)/doc
 	mkdir $(RELEASE_DIR)/doc/man
-	cp -r doc/man/*.[1-9] $(RELEASE_DIR)/doc/man
-	cp doc/text/USAGE $(RELEASE_DIR)/doc
+	cp doc/man/*.[1-9] $(RELEASE_DIR)/doc/man
 	cp README $(RELEASE_DIR)
 
 release: release-dir

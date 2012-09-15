@@ -1,42 +1,317 @@
 How to assemble your alternative OS
 ===================================
 
-0. Create a directory where you want to store the results. I will
-   refer to that directory with $TARGET in the following
-   instructions.
-     $ mkdir -p $TARGET
-1. Cross-compile Busybox with the configuration in `data/configs` and
-   install it somewhere you find it.
-     $ cd <BUSYBOXDOWNLOADPATH>
-     $ cp <INSTALLPATH>/data/configs/busybox*.config .config
-     $ make ARCH=arm CROSS_COMPILE=arm-linux-gnueabi-
-     $ make INSTALL_PATH=$TARGET/busybox install
-2. Cross-compile Linux with the configuration in `data/configs`:
-     $ git clone git://girorious.org/archos/archos-gpl-gen9-kernel-ics.git
-     $ cd archos-gpl-gen9-kernel-ics
-     $ cp <INSTALLPATH>/data/configs/linux*.config .config
-     $ make ARCH=arm CROSS_COMPILE=arm-linux-gnueabi- zImage modules
-     $ make ARCH=arm CROSS_COMPILE=arm-linux-gnueabi- INSTALL_MOD_PATH=$TARGET/kernelmodules
-     $ cp arch/arm/boot/zImage $TARGET
-3. Execute the Initramfs generator:
-     # ruby bin/makeinitramfs -d data/device_table.txt -i data/init \
-     -s data/root-skeleton -b <BUSYBOXDOWNLOADPATH>/_install
-     $ cp initramfs.cpio.lzo $TARGET
-4. Enter the developer edition menu on the tablet, select "Flash
-   kernel and initramfs", connect it to your PC and copy the files
-   onto the tablet:
-     # mount /dev/sdb /mnt
-     # cp $TARGET/zImage /mnt
-     # cp $TARGET/initramfs.cpio.lzo /mnt
-     # umount /dev/sdb
-5. Boot your tablet into the alternate OS. You will end up at a
-   Busybox prompt.
-6. Grab a USB stick and use it to install your favourite Linux
-   distribution with a root tarball. If your tablet has a hard disk,
-   you may want to install it onto that one, otherwise just use the
-   USB stick as the main harddisk.
-7. Copy the kernel modules onto the root device:
-     # cp -r $TARGET/kernelmodules/lib/. <rootmountpoint>/lib
+Step 0: Charge your tablet.
+---------------------------
 
-TODO: Write something about which modules to load and
-ti-connectivity.
+When doing the following experiments, you’re way better off having a
+completely charged tablet. If it for example runs out of power while
+doing the firmware update, you end up with an unusable device.
+
+Step 1: Update the regular firmware
+-----------------------------------
+
+Ensure your tablet has all ARCHOS updates installed. These are usually
+indicated via an "A" in the bottom-right corner of the Android
+system.
+
+Step 2: Install the SDE
+-----------------------
+
+The default bootloader provided by ARCHOS on the 101G9 tablet is a
+locked-down one which doesn’t permit you installing an alternative
+OS. Additionally, any firmwares you could install via the recocery
+menu have to be signed with ARCHOS’ private signing key which most of
+us most likely don’t own.
+
+Fortunately, ARCHOS doesn’t restrict you to this bootloader
+deliberately; the offer a software they call the "Special Developer
+Edition", or SDE for short. This is basically a firmware update
+officially signed by ARCHOS that installs an alternative bootloader
+and extends the already existing recovery menu with a submenu
+targetted at developers. The most interesting aspect in this submenu
+is the option to flash an alternative Linux kernel and an initial
+ramdisk (initramfs) onto the tablet which will then co-exist with the
+Android installation; this is effectively a dual-boot. The developer
+menu offers some additional options which might be interesting for
+you, but are not required for installing an alternative Linux
+distribution.
+
+To install the SDE, download it from the official ARCHOS website (and
+not from anywhere else):
+
+http://www.archos.com/support/support_tech/updates_dev.html
+
+Do read the notes on that web page before installing the SDE. I don’t
+repeat them here.
+
+To install the SDE, completely power off your tablet. After it is off,
+turn it on again pressing down both the power and the volume-down
+button. When the ARCHOS logo appears, release the power button, but
+continue holding down the volume-down button until the bootloader menu
+appears. This is a bit tricky and requires some skill, but usually you
+get it to work after the fourth of fifth try :-). The issue is, that
+if you hold the power button to for too long, the menu will directly
+interpret this as an OK input and boot Android (the default boot
+entry). If you don’t hold it down long enough, the bootloader menu
+doesn’t appear at all and Android is booted as well.
+
+Utilising the volume-up, volume-down and the power button, you can
+navigate the menus (no touch here). Select "Recovery System" → "Update
+Firmware" and connect the tablet to your PC as requested. Copy the SDE
+firmware file onto the device, unmount it and follow the instructions
+on the tablet. The next time the tablet reboots, you will end up in
+Android again, but don’t worry. Just turn it completely off again, and
+again boot up into the bootloader menu. You now should see a new entry
+for the developer edition. If you boot that one, you should be able to
+see a shy unicorn for about ten seconds, then the tablet reboots (into
+Android). This shows you the SDE is properly installed. Additionally,
+the recovery menu now has the required option to flash a new kernel
+and initramfs onto the tablet.
+
+Step 2: Set up your build environment
+-------------------------------------
+
+You now could try conquering ARCHOS’ official build setup at
+http://gitorious.org/archos/archos-gpl-gen9, but that a complex and
+badly documented task. Instead, use the 101g9-alternative setup this
+file is a part of. As you’re reading this, you most likely already
+cloned the repository or downloaded a release tarball; if the former,
+you have to create a release tarball yourself:
+
+  $ make release
+
+You now should create a directory where you do the heavy work in. For
+simplicity, let’s assume you chose `~/archos-build`,
+
+  $ mkdir ~/archos-build
+  $ cd ~/archos-build
+
+Extract the release tarball (regardless whether you created it from
+Git or downloaded it directly):
+
+  $ tar -xvJf /path/to/101g9-alternative-tarball
+
+ Inside the resulting `101g9-alternative-a.b.c` ("a.b.c" being the
+ version number) you’ll find three directories:
+
+* `bin/`, which contains the tools necessary for generating the
+  initramfs.
+* `doc/`, which contains this and more documentation (and manpages for
+  the programs in `bin/`).
+* `data/`, which contains example configurations for the Linux kernel
+  and Busybox as well as an example root skeleton for the
+  initramfs. If you exactly build your initramfs and kernel with the
+  information provided in this directory, you will get a working
+  interactive root shell prompt on the tablet. However, after that you
+  most likely want to customise it, hence I call it "example" stuff.
+
+After this, download the official Busybox sourcecode and the
+ARCHOS-modified Linux kernel. The example configuration files in
+`data/configs` include the version number, so you most likely want to
+stick with what they were for at the moment; you later can of course
+experiment with other versions (install Git from your distribution’s
+repositories if you don’t have it).
+
+  $ mkdir sourcecode
+  $ cd sourcecode
+  $ wget http://busybox.net/downloads/busybox-1.20.2.tar.bz2
+  $ tar -xvjf busybox-1.20.2.tar.bz2
+  $ git clone git://gitorious.org/archos/archos-gpl-gen9-kernel-ics.git
+
+We now have everything that will find its way onto the
+tablet. However, the host system most likely misses some tools. You
+want to install the following software from your distribution’s
+package repositories or by other means:
+
+* `cpio`, the archiving program used to assemble the
+  initramfs. The `bsdcpio` provided by ArchLinux is also OK.
+* `lzop`, the compression program used to compress the initramfs.
+* `arm-linux-gnueabi-gcc`, the cross-compiler. You need to compile
+  both Busybox and the Linux kernel on your host machine for the ARM
+  processor architecture. Sadly, ARCHOS is not up to date with GCC
+  development, and you’re forced to use an old GCC 4.4.x to build the
+  patched Linux kernel. The only Linux distribution I know of that has
+  exactly this version precompiled, is Debian Squeeze, via the Emdebian
+  project (which is officially supported by Debian). You find a deb
+  line for your `sources.lst` at http://www.emdebian.org/crosstools.html.
+  Other than that I fear you have to build GCC with all of its
+  dependencies (libc, binutils, Linux kernel headers (you can use
+  ARCHOS’ ones), etc) yourself. This is really bad, but as long as
+  ARCHOS doesn’t bother to support a recent GCC there’s no
+  alternative. Busybox of course can be compiled with a modern GCC.
+
+As it is necessary to cross-compile both Linux and Busybox later on,
+we set the necessary environment variables here once and for all:
+
+  $ export ARCH=arm
+  $ export CROSS_COMPILE=arm-linux-gnueabi-
+
+`ARCH=arm` tells Linux and Busybox that we’re targetting the ARM
+processor architecture. `CROSS_COMPILE=arm-linux-gnueabi-` is the
+prefix used for the compiler toolchain, i.e. it is prepended to `gcc`
+and the like, forming `arm-linux-gnueabi-gcc`.
+
+To summarise, your build setup should now look like this:
+
+  % tree -L 2 ..
+  ..
+  ├── 101g9-alternative-0.0.1
+  │   ├── README
+  │   ├── bin
+  │   ├── data
+  │   └── doc
+  └── sourcecode
+      ├── archos-gpl-gen9-kernel-ics
+      ├── busybox-1.20.2
+      └── busybox-1.20.2.tar.bz2
+
+Additionally the `ARCH` and `CROSS_COMPILE` environment variables
+should be set as described above.
+
+Step 3: Cross-compile Linux
+---------------------------
+
+You’re now ready to build your tools. Start with building Linux with
+the example configuration:
+
+  $ cd archos-gpl-gen9-kernel-ics
+  $ cp ../../101g9-alternative-0.0.1/data/configs/linux-3.0.8.config.sample .config
+  $ make zImage modules
+
+`zImage` is the target for the actual kernel compilation and `modules`
+compiles all the kernel modules. After the above commands finish, you
+have Linux ready in the file `arch/arm/boot/zImage`. To not lose it
+somewhere on our way, just create a new directory and copy it there:
+
+  $ mkdir ~/archos-build/main-files
+  $ cp arch/arm/boot/zImage ~/archos-build/main-files
+
+Now for the kernel modules:
+
+  $ mkdir ~/archos-build/main-files/mods
+  $ make INSTALL_MOD_PATH=$HOME/archos-build/main-files/mods modules_install
+
+This installs the kernel modules into `~/archos-build/main-files/mods`.
+
+If you later want to change the kernel configuration, run
+
+  $ make menuconfig
+
+and enable/disable the features you do or do not need. Remember to run
+`make` and `make install` after this.
+
+If you get this error on kernel compilation:
+
+  arch/arm/mm/proc-v7.S: Assembler messages:
+  arch/arm/mm/proc-v7.S:391: Error: selected processor does not support ARM mode `smc #0'
+
+your GCC is too new. You *must* use GCC 4.4.x.
+
+Step 4: Cross-compile Busybox
+-----------------------------
+
+Cross-compiling Busybox works very similar, no magic involved
+here. Again just use the example configuration as the base and you
+should be settled:
+
+  $ cd ../busybox-1.20.2
+  $ cp ../../101g9-alternative-0.0.1/data/configs/busybox-1.20.2.config.sample .config
+  $ make
+  $ make install
+
+This will create a directory `./_install` which contains Busybox and
+all applet symlinks to it. If you later want to change the
+configuration, run
+
+  $ make menuconfig
+
+and enable/disable the features you do or do not need. Remember to run
+`make` and `make install` again after this.
+
+Your build tree should now look like this:
+
+  % tree -L 2 ../..
+  ../..
+  ├── 101g9-alternative-0.0.1
+  │   ├── README
+  │   ├── bin
+  │   ├── data
+  │   └── doc
+  ├── main-files
+  │   ├── mods
+  │   └── zImage
+  └── sourcecode
+      ├── archos-gpl-gen9-kernel-ics
+      ├── busybox-1.20.2  # With _install
+      └── busybox-1.20.2.tar.bz2
+
+
+Step 5: Assemble the initial ramdisk
+------------------------------------
+
+It’s time to assemble the initramfs now. `makeinitramfs` is provided
+by the 101g9-alternative package that also contains the file you’re
+reading right now (`makeinitramfs` currently has to be run as root).
+
+  $ cd ../../main-files
+  # ../101g9-alternative/bin/makeinitramfs -b ../sourcecode/busybox-1.20.2/_install -s ../101g9-alternative/data/root-skeleton.sample -d ../101g9-alternative/data/device_table.sample
+
+You now have the two magic files (and the kernel modules) in your
+`~/archos-build/main-files` directory:
+
+  % ls -hl
+  insgesamt 5,3M
+  -rw-r--r-- 1 root    root    1,2M 14. Sep 12:04 initramfs.cpio.lzo
+  drwxr-xr-x 3 quintus quintus 4,0K 14. Sep 11:05 mods
+  -rwxr-xr-x 1 quintus quintus 4,1M 14. Sep 11:03 zImage
+
+Step 6: Flash them onto your tablet
+-----------------------------------
+
+Boot the tablet into the bootloader menu, enter the Recovery →
+Developer Edition menu and select "Flash kernel and initramfs". Connect
+the tablet to your PC, mount it e.g. to `/mnt` and copy the files onto
+it.
+
+  # mount /dev/sdb /mnt
+  # cp zImage /mnt
+  # cp initramfs.cpio.lzo /mnt
+  # umount /mnt
+
+Follow the instructions on the tablet. It will reboot, and once again
+you are in Android. Shut it down completely again, and then boot into
+the bootloader menu. Select "Developer edition" and you should
+hopefully see the magic happen: After a good number of kernel messages
+you finally get a root Busybox prompt (you might not see the prompt at
+once due to the kernel messages--just try it out, it will show
+up!). Connect a USB keyboard to the USB port on the back and if you
+don’t have a US keyboard, use the `km` utility provided by the default
+101g9-alternative root skeleton to load the correct keymap:
+
+  # km de-latin1
+
+Congratulations! You now can plug in a hub and a USB storage device,
+mount it and install your favourite Linux distribution from there! A
+final note on the hardware, though:
+
+* Don’t forget to copy `~/archos-build/main-files/mods` into
+  `/lib/modules` on your new root partition. You’ll need the kernel modules.
+* To get the Wifi chip working, you need the `ti-connectivity` folder from
+  git://git.kernel.org/pub/scm/linux/kernel/git/dwmw2/linux-firmware.git 
+  in your root partition’s `/lib/firmware` directory, i.e.
+  `/lib/firmware/ti-connectivity`. 
+* The touchscreen requires the pixcir_XXXXXX kernel module.
+* You can get the screen to work with X by using `fbdev` as the
+  graphics driver with `/dev/fb0` as the target device.
+* Single-touch can be achieved using the `xorg-input-mtev` driver with
+  the MeeGo patches applied; I’ve created a package in the AUR for it,
+  if you use ArchLinux. Multitouch doesn’t work AFAIK.
+* Screen rotation can be achieved by editing X’s config files at X
+  startup, but while X runs it’s not possible until `fbdev` supports
+  XRandr (but `fbdev` development has completely stalled, so don’t
+  expect this to change).
+* The hardware is nearly the same as that in the popular PandaBoard,
+  a hardware development platform for hardware enthusiasts. You may
+  have more success in web searches if you include "PandaBoard"
+  instead of "ARCHOS 101G9" into your queries.

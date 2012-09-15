@@ -5,15 +5,6 @@ DISCLAIMER: I am not affiliated with ARCHOS in any way. Using the
 kernel/initramfs created by the tools in this repository will void
 your warranty.
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% INCOMPLETION NOTE                        %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% This repository is incomplete. Some      %
-% things described in the README are not   %
-% there yet, most notable the Linux kernel %
-% configuration. Sorry!                    %
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
 What is it?
 -----------
 
@@ -71,10 +62,11 @@ You need some prerequisites. First, you need some hardware:
 
 On the software side, you need:
 
-* An ARMv7 cross compiler. A GCC with target `arm-linux-gnueabi` will
-  do; most Linux distributions have something like that in their
-  repositories, so you don’t have to compile this yourself (for Arch
-  Linux, there’s a package `arm-linux-gnueabi-gcc` in the AUR).
+* An ARMv7 cross compiler. A GCC 4.4.x with target `arm-linux-gnueabi` will
+  do. Newer GCCs fail to compile ARCHOS’ patched Linux kernel; for
+  Debian Squeeze there’s a precompiled version of that compiler
+  available, so I recommend you using that Linux distribution if you
+  don’t want to compile GCC by hand.
 * The `cpio` or `bsdcpio` archive program to assemble the
   Initramfs. Should be in your distribution’s repositories.
 * The `lzop` compression program to compress the Initramfs to the
@@ -82,16 +74,16 @@ On the software side, you need:
   repositories.
 * The [ARCHOS SDE](http://www.archos.com/support/support_tech/updates_dev.html)
   installed on your tablet.
-* The [Ruby](http://ruby-lang.org) interpreter, RubyGems and the
-  `paint` gem. The first two should be in your distribution’s
-  repositories (most likely even in the same package), you can get the
-  last by executing this as root:
-    # gem install paint
+
+If you directly cloned the Git repository, you also need:
+
+* [Ronn](http://rtomayko.github.com/ronn/ronn.1), a Markdown-to-Manpage converter.
+* A `loadkeys` program that supports the `-b` option.
 
 How to use it?
 --------------
 
-See the file USAGE.
+* See the file doc/text/USAGE.
 
 License
 -------

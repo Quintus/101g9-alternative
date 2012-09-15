@@ -1,0 +1,184 @@
+.\" generated with Ronn/v0.7.3
+.\" http://github.com/rtomayko/ronn/tree/0.7.3
+.
+.TH "MAKEINITRAMFS" "1" "September 2012" "101g9-alternative 0.0.1" "101g9-alternative"
+.
+.SH "NAME"
+\fBmakeinitramfs\fR \- Create an initial ramdisk for ARCHOS 101G9 tablets
+.
+.SH "USAGE"
+\fBmakeinitramfs\fR \fB\-d\fR \fIdevicefile\fR \fB\-b\fR \fIbusyboxdir\fR \fB\-s\fR \fIrootskeldir\fR
+.
+.SH "DESCRIPTION"
+\fBmakeinitramfs\fR is the program that generates an initial ramdisk (initramfs) that can be loaded onto the ARCHOS 101G9 (and similar) tablet PCs\. In contrast to ARCHOS’ official build setup using a wealth of Makefiles with hundreds of things you’ll never need, \fImakeinitramfs\fR is simple to configure and adopt to your needs\. It operates on three components:
+.
+.IP "1." 4
+\fIDevice table\fR\. The device table file, usually called \fBdevice_table\.txt\fR, describes the layout of the \fB/dev\fR directory in the initial ramdisk (and if you want other directories as well)\. It creates the devices with their appropriate major and minor numbers and sets permissions and owner\. See \fIDEVICE TABLE\fR below for more information\.
+.
+.IP "2." 4
+\fIRoot skeleton\fR\. The directory you pass \fImakeinitramfs\fR via the \fB\-s\fR option is called the \fIroot skeleton directory\fR; it will be copied as\-is into the initial ramdisk and serve as the root filesystem (\fB/\fR) for it\. Do not confuse this with the actual root filesystem for a Linux distribution if you want to install any\. See \fIROOT SKELETON\fR below for more information\.
+.
+.IP "3." 4
+\fIBusybox\fR\. Probably being the most important component of the initial ramdisk, Busybox \fIhttp://busybox\.net\fR serves as the actual shell and provides the core commands (such as mount(1))\. You must (cross\-)compile your own version of Busybox, see \fIBUSYBOX\fR below\.
+.
+.IP "" 0
+.
+.P
+After you generated the initial ramdisk (it will be placed as \fBinitramfs\.cpio\.lzo\fR in your current working directory), you can flush it together with a fitting Linux kernel on the tablet\. When starting up the so\-called "Developer Edition", the initial ramdisk will be extracted into memory and the file \fB/init\fR in the resulting filesystem is executed (see \fIROOT SKELETON\fR below)\. If you use the default \fBinit\fR provided with this software, it will first set up some core mountpoints such as \fB/proc\fR and finally launch an interactive Busybox prompt\. If you have a non\-US keyboard, you probably want to load an alternative keymap; use the \fBkm\fR program to do so:
+.
+.P
+\fB$ km de\-latin1\fR
+.
+.P
+If you don’t know which keymap you need, you can search the internet with your search engine of choice (pro tip: \fBkm \-l\fR gives you a list of available keymaps)\.
+.
+.P
+From the resulting prompt you should be able to set up anything you desire; just a few notes:
+.
+.IP "\(bu" 4
+The internal flash memory is at \fB/dev/mmcblkp0\fR\. Think twice before repartitioning it, you may be unable to boot Android afterwards or to boot at all if you accidentally delete the bootloader\. To remedy this, you will have to open up your tablet and connect to the serial port\. However, don’t ask me how to do this\.\.\.
+.
+.IP "\(bu" 4
+If you own the HD model, the internal HD is at \fB/dev/sda\fR\.
+.
+.IP "\(bu" 4
+You can plug in a USB storage device at the back of the 101G9 tablet\. It will be available as \fB/dev/sda\fR for non\-HD models and as \fB/dev/sdb\fR for HD models\.
+.
+.IP "\(bu" 4
+The Busybox and Linux configurations supplied with this program are known to work\. You can use them as a starting point for your custom configurations\.
+.
+.IP "\(bu" 4
+Never\-ever forget to turn on the LCD backlight in your \fB/init\fR\. Otherwise, your screen stays black and you might think the tablet did not boot although it did\. See the example \fBinit\fR for more information\.
+.
+.IP "" 0
+.
+.SH "OPTIONS"
+.
+.TP
+\fB\-b\fR \fIPATH\fR
+Path to the Busybox installation\.
+.
+.TP
+\fB\-d\fR \fIFILE\fR
+Path to the device table file\.
+.
+.TP
+\fB\-h\fR
+Display a short help message\.
+.
+.TP
+\fB\-s\fR \fIPATH\fR
+Path to a directory that will be used as \fB/\fR as\-is\.
+.
+.SH "DEVICE TABLE"
+The \fIdevice table\fR defines how \fB/dev\fR and other directories are set up during creation of the initial ramdisk\. It is evaluated after both the root skeleton and the Busybox installation have been copied into the initramfs and allows you to create all needed devices easily by a line\-based configuration instead of having to run mknod(1) thousands of times\. Even easier would be to use \fIudev\fR, which creates the device nodes dynamically, but \fIudev\fR is part of \fIsystemd\fR and cross\-compiling \fIsystemd\fR is a hard task due to the dependencies it has\.
+.
+.SS "File format"
+NOTE: Original documentation was by Erik Andersen \fB<andersen at codepoet dot org>\fR\.
+.
+.P
+To adjust the permissions on a particular, already existing file, you can just add an entry like:
+.
+.P
+\fB/sbin/foobar f 2755 0 0 \- \- \- \- \-\fR
+.
+.P
+and (assuming the file \fB/sbin/foobar\fR exists) it will be made setuid root (regardless of what its permissions are on the host filesystem\.
+.
+.P
+To generete an array of similar device nodes, use the last three fields of a line accordingly\. Counting back from the end, the third field specifies the number to start the device numeration at, the second\-to\-last field specifies the increment between iterations (i\.e\. by specifying 2 you would get 1, 3, 5, etc\. in the device names), and the last field sets the sets the number of iterations \- 1\. Device minor numbers are automatically incremented by 1 per iteration, starting at what the "minor" field says (see further below)\. For example, if I wanted to create \fB/dev/hda\fR and \fB/dev/hda[0\-14]\fR I could just use the following two table entries:
+.
+.P
+\fB<start> <inc> <count>\fR
+.
+.br
+\fB/dev/hda b 640 0 0 3 0 0 0 \-\fR
+.
+.br
+\fB/dev/hda b 640 0 0 3 1 1 1 15\fR
+.
+.P
+When building a target filesystem, it is desirable to not have to become root and then run mknod(1) a thousand times\. Using a device table you can create device nodes and directories "on the fly"\.
+.
+.P
+Device table entries take the form of:
+.
+.P
+\fB<name> <type> <mode> <uid> <gid> <major> <minor> <start> <inc> <count>\fR
+.
+.P
+or, for more compact tables:
+.
+.P
+\fB<name> t mode u g M m s i c\fR
+.
+.P
+where "name" is the file name, "type" can be one of:
+.
+.IP "" 4
+.
+.nf
+
+
+type  description
+───────────────────────────────────
+  f   A regular file
+  d   Directory
+  c   Character special device file
+  b   Block special device file
+  p   Fifo (named pipe)
+.
+.fi
+.
+.IP "" 0
+.
+.P
+\fBuid\fR is the user id for the target file, \fBgid\fR is the group id for the target file\. The \fBmajor\fR and \fBminor\fR entries are only used when creating device nodes (i\.e\. if \fBtype\fR is set to either \fBc\fR or \fBb\fR) and specify the major and minor numbers for that device (you can find the specification for those at http://www\.lanana\.org/docs/device\-list/)\. \fBstart\fR, \fBinc\fR and \fBcount\fR work as explained further above\. All entries in a single line are separated by any amount of blank space, i\.e\. tabs or spaces (which in your own interest you don’t want to mix)\.
+.
+.SH "ROOT SKELETON"
+The \fIroot skeleton\fR is a directory which will recursively be copied as\-is to the \fB/\fR directory of the initial ramdisk file\. It therefore is the right place to place things like binaries or configuration files at\. For example, if you wanted your initial ramdisk to contain a file \fB/etc/resolv\.conf\fR and prepare your root skeleton at \fB/home/dracula/archos/root\fR you would add the file \fB/home/dracula/archos/root/etc/resolv\.conf\fR and pass the root skeleton directory via the \fB\-s\fR option:
+.
+.P
+\fBmakeinitramfs \.\.\. \-s /home/dracula/archos/root \.\.\.\fR
+.
+.P
+The most imporant file you have to place in your root skeleton directory is \fB/init\fR, i\.e\. \fB/home/dracula/archos/root/init\fR in the above example\. This is an executable file, usually a shell script, that does the core initialisation for the initial ramdisk environment; for instance it mounts things like \fB/proc\fR\. \fBmakeinitramfs\fR comes with an example init script that is known to work on the ARCHOS 101G9 tablet; after everything necessary is set up, it starts an interactive Busybox prompt with PID 1 via exec(1) so you can continue booting into your favourite Linux distribution\. Note that this is the root process for all other processes; if it exits (including a manual call to exit(1) in the interactive prompt) the kernel will complain with "attempt to kill init" and initiate a kernel panic\. See the sample \fBinit\fR script for what exactly is done\.
+.
+.SH "BUSYBOX"
+\fIBusybox\fR is a small and self\-contained Linux shell environment that, if compiled properly, provides everything necessary to get a "big" Linux distribution up and running\. However, if you don’t mind not installing one, Busybox can also be used sort of as\-is as a minimal working environment\. See http://busybox\.net for more information about Busybox\. It is highly modular by employing a concept of "applets" which are effectively programs emulatable by Busybox\. "mount" is such an applet, and "sh" is as well\. They provide the mount(1) and sh(1) programs, respectively\.
+.
+.P
+The ARCHOS 101G9 tablet is equipped with an ARMv7 processor, namely the OMAP4 manufactured by Texas Instruments (TI)\. To get a working Busybox, you therefore need to compile it for this architecture, which for the usual GCC is represented by the host triplet arm\-linux\-gnueabi\. Most Linux distributions have such a cross\-compiler in their package repsitories, so you usually do not have to compile \fBgcc\fR itself which is a quite lengthy task (and is required when you use the official ARCHOS build setup)\. Even Debian’s old gcc (tested with Debian Squeeze) worked, so that should not be a problem\. Use these commands to cross\-compile Busybox:
+.
+.P
+\fB$ cp\fR \fIsampledir\fR/configs/busybox\-*\.config\.sample \fB\.config\fR
+.
+.br
+\fB$ make ARCH=arm CROSS_COMPILE=arm\-linux\-gnueabi\-\fR
+.
+.P
+After you cross\-compiled Busybox you need to install it, because most likely you don’t want all the Busybox source files in your initial ramdisk:
+.
+.P
+\fB$ make install\fR
+.
+.P
+This will create a directory \fB_install\fR in your current working directory\. This is what you want to hand to the \fB\-b\fR option of \fBmakeinitramfs\fR:
+.
+.P
+\fB$ makeinitramfs \.\.\. \-b\fR \fIbbpath\fR/\fB_install\fR \fB\.\.\.\fR
+.
+.P
+As shown above, \fBmakeinitramfs\fR comes with an example configuration for Busybox that is known to work and to provide all necessary applets, so you can use that as a base for further customisations\. In contrast to the example Linux configuration also provided, the Busybox configuration is directly targetted at official (vanilla) Busybox sources from http://busybox\.net and allows you to build a much more recent version of Busybox than that one included in the ARCHOS offical build setup\.
+.
+.P
+To simplify interacting with the Busybox on an international base, be sure to include the \fBloadkmap\fR applet in Busybox\. The sample root skeleton contains a wrapper around this applet, \fBkm\fR, that allows you to easily load keymaps different from the default US\-English one:
+.
+.P
+\fB$ km de\-latin1\fR
+.
+.P
+A good number of keymaps is also included in the sample root skeleton, so it is likely you do not have to build a Busybox keymap yourself\.
+.
+.SH "AUTHOR"
+\fBmakeinitramfs\fR and this man page were written by Marvin Gülker \fB<m\-guelker at quintilianus dot eu>\fR\.
